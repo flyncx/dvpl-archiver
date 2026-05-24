@@ -64,31 +64,7 @@ fn pack_program(
     println!("Packing: {} -> {}", source.display(), destination.display());
 
     let input_bytes = fs::read(source)?;
-    let mut output_bytes = match compression_format {
-        CompressionFormat::None => input_bytes.clone(),
-        CompressionFormat::Lz4 => lz4::block::compress(
-            &input_bytes,
-            Some(lz4::block::CompressionMode::DEFAULT),
-            false,
-        )?,
-        CompressionFormat::Lz4HC => lz4::block::compress(
-            &input_bytes,
-            Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
-            false,
-        )?,
-        CompressionFormat::Unknown => panic!("Unknown compression format"),
-    };
-
-    let mut footer_bytes = vec![0u8; 20];
-    let footer = Footer::new(
-        input_bytes.len(),
-        output_bytes.len(),
-        crc32fast::hash(&output_bytes),
-        compression_format,
-    );
-    footer.write(&mut footer_bytes);
-    output_bytes.extend_from_slice(&footer_bytes);
-
+    let output_bytes = pack_bytes(input_bytes, compression_format);
     fs::write(destination, output_bytes)?;
     Ok(())
 }
@@ -108,7 +84,43 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     );
 
     let input_bytes = fs::read(source)?;
+    let output_bytes = unpack_bytes(input_bytes);
+    fs::write(destination, output_bytes)?;
+    Ok(())
+}
 
+fn pack_bytes(
+    input_bytes: Vec<u8>,
+    compression_format: CompressionFormat,
+) -> Vec<u8> {
+    let mut output_bytes = match compression_format {
+        CompressionFormat::None => input_bytes.clone(),
+        CompressionFormat::Lz4 => lz4::block::compress(
+            &input_bytes,
+            Some(lz4::block::CompressionMode::DEFAULT),
+            false,
+        ).unwrap(),
+        CompressionFormat::Lz4HC => lz4::block::compress(
+            &input_bytes,
+            Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
+            false,
+        ).unwrap(),
+        CompressionFormat::Unknown => panic!("Unknown compression format"),
+    };
+
+    let mut footer_bytes = vec![0u8; 20];
+    let footer = Footer::new(
+        input_bytes.len(),
+        output_bytes.len(),
+        crc32fast::hash(&output_bytes),
+        compression_format,
+    );
+    footer.write(&mut footer_bytes);
+    output_bytes.extend_from_slice(&footer_bytes);
+    output_bytes
+}
+
+fn unpack_bytes(input_bytes: Vec<u8>) -> Vec<u8> {
     if input_bytes.len() < 20 {
         panic!(
             "Input file is not big enough to be a DVPL Resource Archive. It is less than 20 bytes long"
@@ -128,12 +140,10 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
         CompressionFormat::Lz4 | CompressionFormat::Lz4HC => lz4::block::decompress(
             compressed_bytes,
             Some(footer.input_size.try_into().unwrap()),
-        )?,
+        ).unwrap(),
         CompressionFormat::Unknown => panic!("Unknown compression format"),
     };
-
-    fs::write(destination, output_bytes)?;
-    Ok(())
+    output_bytes
 }
 
 #[derive(Debug)]
