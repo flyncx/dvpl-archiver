@@ -33,7 +33,7 @@ Arguments:
   <file>  Input file path
 
 Options:
-  -f, --format <compression_format>  Compression format: 0 = none, 1 = lz4, 2 = lz4 high compression
+  -f, --format <compression_format>  Compression format: 0 = none, 1 = lz4, 2 = lz4hc (default)
   -h, --help                         Print help
 ```
 
