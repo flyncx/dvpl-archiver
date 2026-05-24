@@ -14,6 +14,13 @@ fn main() {
                         .help("Input file path")
                         .required(true)
                         .value_parser(value_parser!(PathBuf)),
+                )
+                .arg(
+                    Arg::new("compression_format")
+                        .short('f')
+                        .long("format")
+                        .help("Compression format: 1 = lz4, 2 = lz4 high compression")
+                        .value_parser(value_parser!(u32).range(1..3)),
                 ),
         )
         .subcommand(
@@ -30,7 +37,14 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("pack") {
         let path = matches.get_one::<PathBuf>("file").unwrap();
-        pack_program(path).unwrap();
+
+        let mut compression_format = CompressionFormat::Lz4HC;
+        let cf_match: Option<&u32> = matches.get_one("compression_format");
+        if cf_match.is_some() {
+            compression_format = CompressionFormat::from_u32(*cf_match.unwrap())
+        }
+
+        pack_program(path, compression_format).unwrap();
     }
 
     if let Some(matches) = matches.subcommand_matches("unpack") {
@@ -39,7 +53,10 @@ fn main() {
     }
 }
 
-fn pack_program(source: &PathBuf) -> Result<(), std::io::Error> {
+fn pack_program(
+    source: &PathBuf,
+    compression_format: CompressionFormat,
+) -> Result<(), std::io::Error> {
     let source = source;
     let mut destination = PathBuf::from(source);
     destination.add_extension("dvpl");
@@ -47,18 +64,22 @@ fn pack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     println!("Packing: {} -> {}", source.display(), destination.display());
 
     let input_bytes = fs::read(source)?;
-    let mut output_bytes = lz4::block::compress(
-        &input_bytes,
-        Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
-        false,
-    )?;
+    let mut output_bytes = match compression_format {
+        CompressionFormat::Lz4 => lz4::block::compress(&input_bytes, None, false)?,
+        CompressionFormat::Lz4HC => lz4::block::compress(
+            &input_bytes,
+            Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
+            false,
+        )?,
+        CompressionFormat::Unknown => panic!("Unknown compression format"),
+    };
 
     let mut footer_bytes = vec![0u8; 20];
     let footer = Footer::new(
         input_bytes.len(),
         output_bytes.len(),
         crc32fast::hash(&output_bytes),
-        CompressionFormat::Lz4HC,
+        compression_format,
     );
     footer.write(&mut footer_bytes);
     output_bytes.extend_from_slice(&footer_bytes);
@@ -98,7 +119,7 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     }
 
     let output_bytes = match footer.compression_format {
-        CompressionFormat::Lz4HC => lz4::block::decompress(
+        CompressionFormat::Lz4 | CompressionFormat::Lz4HC => lz4::block::decompress(
             compressed_bytes,
             Some(footer.input_size.try_into().unwrap()),
         )?,
@@ -111,18 +132,21 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
 
 #[derive(Debug)]
 enum CompressionFormat {
+    Lz4,
     Lz4HC,
     Unknown,
 }
 impl CompressionFormat {
     fn to_u32(&self) -> u32 {
         match self {
+            CompressionFormat::Lz4 => 1,
             CompressionFormat::Lz4HC => 2,
             CompressionFormat::Unknown => 99,
         }
     }
     fn from_u32(input: u32) -> CompressionFormat {
         match input {
+            1 => CompressionFormat::Lz4,
             2 => CompressionFormat::Lz4HC,
             _ => CompressionFormat::Unknown,
         }
