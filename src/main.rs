@@ -19,7 +19,7 @@ fn main() {
                     Arg::new("compression_format")
                         .short('f')
                         .long("format")
-                        .help("Compression format: 0 = none, 1 = lz4, 2 = lz4 high compression")
+                        .help("Compression format: 0 = none, 1 = lz4, 2 = lz4hc (default)")
                         .value_parser(value_parser!(u32).range(0..3)),
                 ),
         )
