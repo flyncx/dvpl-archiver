@@ -19,8 +19,8 @@ fn main() {
                     Arg::new("compression_format")
                         .short('f')
                         .long("format")
-                        .help("Compression format: 1 = lz4, 2 = lz4 high compression")
-                        .value_parser(value_parser!(u32).range(1..3)),
+                        .help("Compression format: 0 = none, 1 = lz4, 2 = lz4 high compression")
+                        .value_parser(value_parser!(u32).range(0..3)),
                 ),
         )
         .subcommand(
@@ -65,7 +65,12 @@ fn pack_program(
 
     let input_bytes = fs::read(source)?;
     let mut output_bytes = match compression_format {
-        CompressionFormat::Lz4 => lz4::block::compress(&input_bytes, None, false)?,
+        CompressionFormat::None => input_bytes.clone(),
+        CompressionFormat::Lz4 => lz4::block::compress(
+            &input_bytes,
+            Some(lz4::block::CompressionMode::DEFAULT),
+            false,
+        )?,
         CompressionFormat::Lz4HC => lz4::block::compress(
             &input_bytes,
             Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
@@ -119,6 +124,7 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     }
 
     let output_bytes = match footer.compression_format {
+        CompressionFormat::None => compressed_bytes.try_into().unwrap(),
         CompressionFormat::Lz4 | CompressionFormat::Lz4HC => lz4::block::decompress(
             compressed_bytes,
             Some(footer.input_size.try_into().unwrap()),
@@ -132,6 +138,7 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
 
 #[derive(Debug)]
 enum CompressionFormat {
+    None,
     Lz4,
     Lz4HC,
     Unknown,
@@ -139,6 +146,7 @@ enum CompressionFormat {
 impl CompressionFormat {
     fn to_u32(&self) -> u32 {
         match self {
+            CompressionFormat::None => 0,
             CompressionFormat::Lz4 => 1,
             CompressionFormat::Lz4HC => 2,
             CompressionFormat::Unknown => 99,
@@ -146,6 +154,7 @@ impl CompressionFormat {
     }
     fn from_u32(input: u32) -> CompressionFormat {
         match input {
+            0 => CompressionFormat::None,
             1 => CompressionFormat::Lz4,
             2 => CompressionFormat::Lz4HC,
             _ => CompressionFormat::Unknown,
