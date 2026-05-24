@@ -89,22 +89,21 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn pack_bytes(
-    input_bytes: Vec<u8>,
-    compression_format: CompressionFormat,
-) -> Vec<u8> {
+fn pack_bytes(input_bytes: Vec<u8>, compression_format: CompressionFormat) -> Vec<u8> {
     let mut output_bytes = match compression_format {
         CompressionFormat::None => input_bytes.clone(),
         CompressionFormat::Lz4 => lz4::block::compress(
             &input_bytes,
             Some(lz4::block::CompressionMode::DEFAULT),
             false,
-        ).unwrap(),
+        )
+        .unwrap(),
         CompressionFormat::Lz4HC => lz4::block::compress(
             &input_bytes,
             Some(lz4::block::CompressionMode::HIGHCOMPRESSION(999)),
             false,
-        ).unwrap(),
+        )
+        .unwrap(),
         CompressionFormat::Unknown => panic!("Unknown compression format"),
     };
 
@@ -140,7 +139,8 @@ fn unpack_bytes(input_bytes: Vec<u8>) -> Vec<u8> {
         CompressionFormat::Lz4 | CompressionFormat::Lz4HC => lz4::block::decompress(
             compressed_bytes,
             Some(footer.input_size.try_into().unwrap()),
-        ).unwrap(),
+        )
+        .unwrap(),
         CompressionFormat::Unknown => panic!("Unknown compression format"),
     };
     output_bytes
