@@ -1,0 +1,9 @@
+[package]
+name = "dvpl-archiver"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.1", features = ["cargo"]}
+crc32fast = "1.5.0"
+lz4 = "1.28.1"
