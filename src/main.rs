@@ -92,6 +92,11 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     let compressed_bytes = &input_bytes[..input_bytes.len() - 20];
     let footer_bytes = &input_bytes[input_bytes.len() - 20..].to_vec();
     let footer = Footer::from_vec(footer_bytes);
+    
+    if footer.magic_string != u32::from_be_bytes(*b"DVPL") {
+        panic!("DVPL magic string isn't found. The file is likely not a DVPL Resource Archive")
+    }
+    
     let output_bytes = lz4::block::decompress(
         compressed_bytes,
         Some(footer.input_size.try_into().unwrap()),
@@ -106,6 +111,7 @@ struct Footer {
     compressed_size: u32,
     compressed_checksum: u32,
     compression_format: u32,
+    magic_string: u32,
 }
 impl Footer {
     fn new(
@@ -119,6 +125,7 @@ impl Footer {
             compressed_size: compressed_size.try_into().unwrap(),
             compressed_checksum,
             compression_format,
+            magic_string: u32::from_be_bytes(*b"DVPL")
         }
     }
     fn write(&self, target_vec: &mut Vec<u8>) {
@@ -129,7 +136,7 @@ impl Footer {
         target_vec[4..8].copy_from_slice(&self.compressed_size.to_le_bytes());
         target_vec[8..12].copy_from_slice(&self.compressed_checksum.to_le_bytes());
         target_vec[12..16].copy_from_slice(&self.compression_format.to_le_bytes());
-        target_vec[16..20].copy_from_slice(&*b"DVPL");
+        target_vec[16..20].copy_from_slice(&self.magic_string.to_be_bytes());
     }
     fn from_vec(target_vec: &Vec<u8>) -> Footer {
         if target_vec.len() != 20 {
@@ -141,6 +148,7 @@ impl Footer {
             compressed_size: u32::from_le_bytes(target_vec[4..8].try_into().unwrap()),
             compressed_checksum: u32::from_le_bytes(target_vec[8..12].try_into().unwrap()),
             compression_format: u32::from_le_bytes(target_vec[12..16].try_into().unwrap()),
+            magic_string: u32::from_be_bytes(target_vec[16..20].try_into().unwrap())
         }
     }
 }
