@@ -58,7 +58,7 @@ fn pack_program(source: &PathBuf) -> Result<(), std::io::Error> {
         input_bytes.len(),
         output_bytes.len(),
         crc32fast::hash(&output_bytes),
-        2,
+        CompressionFormat::Lz4HC,
     );
     footer.write(&mut footer_bytes);
     output_bytes.extend_from_slice(&footer_bytes);
@@ -92,17 +92,41 @@ fn unpack_program(source: &PathBuf) -> Result<(), std::io::Error> {
     let compressed_bytes = &input_bytes[..input_bytes.len() - 20];
     let footer_bytes = &input_bytes[input_bytes.len() - 20..].to_vec();
     let footer = Footer::from_vec(footer_bytes);
-    
+
     if footer.magic_string != u32::from_be_bytes(*b"DVPL") {
         panic!("DVPL magic string isn't found. The file is likely not a DVPL Resource Archive")
     }
-    
-    let output_bytes = lz4::block::decompress(
-        compressed_bytes,
-        Some(footer.input_size.try_into().unwrap()),
-    )?;
+
+    let output_bytes = match footer.compression_format {
+        CompressionFormat::Lz4HC => lz4::block::decompress(
+            compressed_bytes,
+            Some(footer.input_size.try_into().unwrap()),
+        )?,
+        CompressionFormat::Unknown => panic!("Unknown compression format"),
+    };
+
     fs::write(destination, output_bytes)?;
     Ok(())
+}
+
+#[derive(Debug)]
+enum CompressionFormat {
+    Lz4HC,
+    Unknown,
+}
+impl CompressionFormat {
+    fn to_u32(&self) -> u32 {
+        match self {
+            CompressionFormat::Lz4HC => 2,
+            CompressionFormat::Unknown => 99,
+        }
+    }
+    fn from_u32(input: u32) -> CompressionFormat {
+        match input {
+            2 => CompressionFormat::Lz4HC,
+            _ => CompressionFormat::Unknown,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -110,7 +134,7 @@ struct Footer {
     input_size: u32,
     compressed_size: u32,
     compressed_checksum: u32,
-    compression_format: u32,
+    compression_format: CompressionFormat,
     magic_string: u32,
 }
 impl Footer {
@@ -118,14 +142,14 @@ impl Footer {
         input_size: usize,
         compressed_size: usize,
         compressed_checksum: u32,
-        compression_format: u32,
+        compression_format: CompressionFormat,
     ) -> Footer {
         Footer {
             input_size: input_size.try_into().unwrap(),
             compressed_size: compressed_size.try_into().unwrap(),
             compressed_checksum,
             compression_format,
-            magic_string: u32::from_be_bytes(*b"DVPL")
+            magic_string: u32::from_be_bytes(*b"DVPL"),
         }
     }
     fn write(&self, target_vec: &mut Vec<u8>) {
@@ -135,7 +159,7 @@ impl Footer {
         target_vec[0..4].copy_from_slice(&self.input_size.to_le_bytes());
         target_vec[4..8].copy_from_slice(&self.compressed_size.to_le_bytes());
         target_vec[8..12].copy_from_slice(&self.compressed_checksum.to_le_bytes());
-        target_vec[12..16].copy_from_slice(&self.compression_format.to_le_bytes());
+        target_vec[12..16].copy_from_slice(&self.compression_format.to_u32().to_le_bytes());
         target_vec[16..20].copy_from_slice(&self.magic_string.to_be_bytes());
     }
     fn from_vec(target_vec: &Vec<u8>) -> Footer {
@@ -147,8 +171,10 @@ impl Footer {
             input_size: u32::from_le_bytes(target_vec[0..4].try_into().unwrap()),
             compressed_size: u32::from_le_bytes(target_vec[4..8].try_into().unwrap()),
             compressed_checksum: u32::from_le_bytes(target_vec[8..12].try_into().unwrap()),
-            compression_format: u32::from_le_bytes(target_vec[12..16].try_into().unwrap()),
-            magic_string: u32::from_be_bytes(target_vec[16..20].try_into().unwrap())
+            compression_format: CompressionFormat::from_u32(u32::from_le_bytes(
+                target_vec[12..16].try_into().unwrap(),
+            )),
+            magic_string: u32::from_be_bytes(target_vec[16..20].try_into().unwrap()),
         }
     }
 }
