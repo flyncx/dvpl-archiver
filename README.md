@@ -27,13 +27,14 @@ Options:
 ```bash
 Pack input file into DVPL Resource Archive
 
-Usage: dvpl-archiver pack <file>
+Usage: dvpl-archiver pack [OPTIONS] <file>
 
 Arguments:
   <file>  Input file path
 
 Options:
-  -h, --help  Print help
+  -f, --format <compression_format>  Compression format: 0 = none, 1 = lz4, 2 = lz4 high compression
+  -h, --help                         Print help
 ```
 
 `dvpl-archiver unpack`
