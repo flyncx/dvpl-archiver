@@ -1,6 +1,13 @@
 # DVPL Archiver
 A CLI tool to unpack/pack DVPL Resource Archive.
 
+### Installation
+1. Clone this repository;
+2. CD into it;
+3. Make sure the source code is gud;
+3. Run `cargo install --path .`
+
+
 ### CLI
 `dvpl-archiver help`
 ```sh
