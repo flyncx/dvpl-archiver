@@ -10,9 +10,10 @@ fn main() {
             Command::new("pack")
                 .about("Pack input file into DVPL Resource Archive")
                 .arg(
-                    Arg::new("file")
+                    Arg::new("files")
                         .help("Input file path")
                         .required(true)
+                        .num_args(1..)
                         .value_parser(value_parser!(PathBuf)),
                 )
                 .arg(
@@ -27,16 +28,17 @@ fn main() {
             Command::new("unpack")
                 .about("Unpack DVPL Resource Archive")
                 .arg(
-                    Arg::new("file")
+                    Arg::new("files")
                         .help("DVPL Resource Archive path")
                         .required(true)
+                        .num_args(1..)
                         .value_parser(value_parser!(PathBuf)),
                 ),
         )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("pack") {
-        let path = matches.get_one::<PathBuf>("file").unwrap();
+        let files = matches.get_many::<PathBuf>("files").unwrap();
 
         let mut compression_format = CompressionFormat::Lz4HC;
         let cf_match: Option<&u32> = matches.get_one("compression_format");
@@ -44,12 +46,16 @@ fn main() {
             compression_format = CompressionFormat::from_u32(*cf_match.unwrap())
         }
 
-        pack_program(path, compression_format).unwrap();
+        for file in files {
+            pack_program(file, compression_format.clone()).unwrap();
+        }
     }
 
     if let Some(matches) = matches.subcommand_matches("unpack") {
-        let path = matches.get_one::<PathBuf>("file").unwrap();
-        unpack_program(path).unwrap();
+        let files = matches.get_many::<PathBuf>("files").unwrap();
+        for file in files {
+            unpack_program(file).unwrap();
+        }
     }
 }
 
@@ -146,7 +152,7 @@ fn unpack_bytes(input_bytes: Vec<u8>) -> Vec<u8> {
     output_bytes
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum CompressionFormat {
     None,
     Lz4,
